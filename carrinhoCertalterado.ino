@@ -154,7 +154,7 @@ void maquina_estados_desvio_obstaculos(bool tem_obstaculo)
             {
                 /* Obstáculo encontrado. O robô deve girar para
                    desviar dele */
-                Serial.println("[MOVIMENTO] Obstaculo encontrado!");   
+                //Serial.println("[MOVIMENTO] Obstaculo encontrado!");   
                  
                 /* Alterna sentido de giro para se livrar de obstáculos
                    (para otimizar o desvio de obstáculos) */
