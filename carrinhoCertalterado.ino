@@ -43,8 +43,8 @@ char estado_desvio_obstaculos = ESTADO_AGUARDA_OBSTACULO;
 /* Protótipos */
 void configura_gpios_controle_motor(void);
 void controla_motor(char motor, char acao);
-float le_distancia_sensor_ultrasonico(void);
-void maquina_estados_desvio_obstaculos(float distancia_obstaculo);
+bool le_distancia_sensor_ultrasonico(void);
+void maquina_estados_desvio_obstaculos(bool distancia_obstaculo);
  
 /* Função: configura GPIOs de controle do L298N como output
  * Parâmetros: nenhum
@@ -95,13 +95,13 @@ void controla_motor(char motor, char acao)
             break;
  
         case ACAO_MOVIMENTO_ANTI_HORARIO:
-            digitalWrite(gpio_1_motor, LOW);
-            digitalWrite(gpio_2_motor, HIGH);
+            digitalWrite(gpio_1_motor, HIGH);
+            digitalWrite(gpio_2_motor, LOW);
             break;
  
         case ACAO_MOVIMENTO_HORARIO:
-            digitalWrite(gpio_1_motor, HIGH);
-            digitalWrite(gpio_2_motor, LOW);
+            digitalWrite(gpio_1_motor, LOW);
+            digitalWrite(gpio_2_motor, HIGH);
             break;
  
         case ACAO_PONTO_MORTO:
@@ -117,32 +117,44 @@ void controla_motor(char motor, char acao)
  
 /* Função: faz leitura da distância (em centímetros) de obstáculo a frente do robô
  * Parâmetros: nenhum
- * Retorno: distância (cm)
+ * Retorno: Distância acima ou abaixo do permitido (booleano)
  */
-float le_distancia_sensor_ultrasonico(void)
+bool le_distancia_sensor_ultrasonico(void)
 {
-    float distancia_cm = 0.0;
+    float distancia_cm;
+    char quantidade_de_distancias_aceitas = 0;
     long microsec = 0;
-     
-    microsec = ultrasonic.timing();
-    distancia_cm = ultrasonic.convert(microsec, Ultrasonic::CM);
-    return distancia_cm;
+    
+    //faz 3 leituras e incrementa a quantidade de distâncias aceitas se não houver um obstáculo ou a diminui caso haja
+    for(char i = 0; i < 3; i++){
+      microsec = ultrasonic.timing();
+      distancia_cm = ultrasonic.convert(microsec, Ultrasonic::CM);
+      //Serial.println(distancia_cm);
+      quantidade_de_distancias_aceitas += (distancia_cm > DISTANCIA_MINIMA_CM ? 1 : (-1));
+    }
+
+    //retorna se tem ou não um obstáculo
+    switch(quantidade_de_distancias_aceitas){
+      case 3: return false;
+      case (-3): return true;
+      default: return le_distancia_sensor_ultrasonico();
+    }
 }
  
 /* Função: maquina de estado responsavel por controlar o desvio de obstáculos
- * Parâmetros: distância de obstáculo a frente
+ * Parâmetros: existência de obstáculo a frente
  * Retorno: nenhum
  */
-void maquina_estados_desvio_obstaculos(float distancia_obstaculo)
+void maquina_estados_desvio_obstaculos(bool tem_obstaculo)
 {
     switch(estado_desvio_obstaculos)
     {
         case ESTADO_AGUARDA_OBSTACULO:
-            if (distancia_obstaculo <= DISTANCIA_MINIMA_CM)
+            if (tem_obstaculo)
             {
                 /* Obstáculo encontrado. O robô deve girar para
                    desviar dele */
-                //Serial.println("[MOVIMENTO] Obstaculo encontrado!");   
+                Serial.println("[MOVIMENTO] Obstaculo encontrado!");   
                  
                 /* Alterna sentido de giro para se livrar de obstáculos
                    (para otimizar o desvio de obstáculos) */
@@ -160,12 +172,15 @@ void maquina_estados_desvio_obstaculos(float distancia_obstaculo)
                 /* Se não há obstáculos, continua em frente */
                 controla_motor(MOTOR_A, ACAO_MOVIMENTO_HORARIO);
                 controla_motor(MOTOR_B, ACAO_MOVIMENTO_HORARIO);
+
+                //Dá tempo para o carrinho andar um pouco para frente
+                delay(TEMPO_ENTRE_LEITURAS_DE_DISTANCIA);
             }
              
             break;
  
         case ESTADO_GIRANDO: 
-            if (distancia_obstaculo > DISTANCIA_MINIMA_CM)
+            if (!tem_obstaculo)
             {
                 /* Não há mais obstáculo a frente do robô */  
                 estado_desvio_obstaculos = ESTADO_AGUARDA_OBSTACULO; 
@@ -184,15 +199,23 @@ void maquina_estados_desvio_obstaculos(float distancia_obstaculo)
                     controla_motor(MOTOR_B, ACAO_MOVIMENTO_ANTI_HORARIO);
                     //Serial.println("[MOVIMENTO] Girando no sentido horario...");
                 }
+
+                //Dá tempo para o carrinho girar
+                delay(1.5*TEMPO_ENTRE_LEITURAS_DE_DISTANCIA);
             }
              
             break;
     }
+
+    //Para o carro para estabilizar a leitura da distância
+    controla_motor(MOTOR_A, ACAO_FREIO);
+    controla_motor(MOTOR_B, ACAO_FREIO);
+    delay(TEMPO_ENTRE_LEITURAS_DE_DISTANCIA);
 }
  
 void setup() 
 {
-    Serial.begin(115200);
+    //Serial.begin(9600);
      
     /* Configura GPIOs de controle do L298N como output e coloca motor em condição de freio */
     configura_gpios_controle_motor();    
@@ -202,17 +225,9 @@ void setup()
  
 void loop() 
 {
-  /*
-    float distancia_a_frente = 0.0;
- 
-    distancia_a_frente = le_distancia_sensor_ultrasonico();
-    Serial.print("* Distancia lida: ");
-    Serial.print(distancia_a_frente);
-    Serial.println("cm");
- 
     /* Verifica se há obstáculo a frente */
-    maquina_estados_desvio_obstaculos
-    (le_distancia_sensor_ultrasonico());
+    maquina_estados_desvio_obstaculos(le_distancia_sensor_ultrasonico());
  
     delay(TEMPO_ENTRE_LEITURAS_DE_DISTANCIA);
+    
 }
