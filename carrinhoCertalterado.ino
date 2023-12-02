@@ -1,6 +1,6 @@
 #include <Ultrasonic.h>
  
-//
+//codigo retirado do site makerhero
 
 
 /* Definições dos GPIOs para leitura do sensor ultrasonico */
